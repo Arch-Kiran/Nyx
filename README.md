@@ -2,9 +2,7 @@
 
 > **"Your desktop died. Your files didn't. CLIFM keeps you moving."**
 
-A fast, zero-dependency, ASCII-art file manager for the terminal. Built for Linux users who live without a desktop environment — Kali, Arch, servers, chroots, Termux on Android — anywhere a GUI file manager is absent, broken, or just too slow to matter.
-
-CLIFM starts in under a second, runs on any terminal width, and never touches the mouse. Every operation is one or two keystrokes.
+A zero-dependency, ASCII-art file manager for the terminal. Built for Linux users who live without a desktop environment — Kali, Arch, servers, chroots, Termux on Android — anywhere a GUI file manager is absent, broken, or simply not needed.
 
 ---
 
@@ -15,87 +13,89 @@ CLIFM starts in under a second, runs on any terminal width, and never touches th
 
 ---
 
-## Why CLIFM Exists
+## Features
 
-When you boot into a minimal Arch install, a Kali live USB, an Android phone running Termux, or SSH into a headless server — there is no Nautilus, no Dolphin, no Thunar. You are left with raw `ls`, `cp`, `mv`, `rm` commands chained together, trying to remember paths, making typos, and losing track of where you are.
-
-CLIFM solves this. It gives you a real file manager — with icons, two view modes, clipboard, search, compression, extraction, properties, and a shell escape — entirely inside the terminal, requiring nothing beyond Python 3.8 and the standard library.
+- **Icon grid and list view** — ASCII art file icons with colors per file type, switchable with one key
+- **Full file operations** — copy, cut, paste, delete, rename, new file/dir, chmod, open with
+- **Multiselect** — mark multiple files with Space, apply any operation to all marked at once
+- **Trash bin** — move to trash instead of permanent delete, with restore and clear options
+- **Bookmarks** — save and jump to paths, stored inside clifm.py itself, no external files
+- **Bulk rename** — mark multiple files, press R, edit all names in your editor at once
+- **Compression** — zip, tar.gz, tar.bz2, tar.xz, tar, gz, bz2, xz, 7z, zst
+- **Extraction** — all major archive formats auto-detected
+- **Find** — searches ~/ first, then optionally expands to full system scan
+- **Deep recursive search** — search inside any directory
+- **Filter** — live filter current directory by filename
+- **Go to path** — real-time Tab completion path input with live results shown as you type
+- **Navigation history** — back and forward like a browser
+- **Properties panel** — full file stats, permissions, MIME type, inode
+- **Shell escape** — drop to shell in current directory, return to CLIFM after
+- **30+ distro support** — auto-detects OS and package manager,
+- **Termux/Android support** — full support, never uses sudo
+- **Zero dependencies** — pure Python 3.8+ stdlib, one file, no pip installs
 
 ---
 
 ## Requirements
 
 - Python 3.8 or newer
-- Any Linux terminal (xterm, alacritty, kitty, gnome-terminal, termux, tmux, etc.)
-- No pip packages. No external libraries. Zero installation beyond copying one file.
+- Any Linux terminal
+- No pip packages. No external libraries. Zero installation.
 
 ```bash
 python3 clifm.py              # start in home directory
-python3 clifm.py /etc         # start in a specific directory
-chmod +x clifm.py && ./clifm  # run directly if executable
+python3 clifm.py /etc         # start at a specific path
+chmod +x clifm.py && ./clifm.py
 ```
 
 ---
 
 ## Supported Operating Systems
 
-CLIFM auto-detects your OS at startup and adapts accordingly.
-
-| OS / Distro Family | Package Manager Used | Notes |
-|--------------------|---------------------|-------|
-| Arch, Manjaro, EndeavourOS, Artix, Garuda, CachyOS | pacman / yay / paru | AUR helpers preferred if present |
-| Debian, Ubuntu, Kali, Mint, Pop!_OS, Parrot, Raspbian | apt / nala | nala preferred if installed |
-| Fedora, RHEL, Rocky, AlmaLinux, Nobara | dnf5 / dnf / yum | dnf5 preferred on Fedora 41+ |
-| openSUSE Leap / Tumbleweed, SLES | zypper | |
-| Alpine, postmarketOS | apk | |
-| Void Linux | xbps-install | |
-| Gentoo, Calculate | emerge | |
-| NixOS | nix-env | |
-| Solus | eopkg | |
-| Clear Linux | swupd | |
-| Slackware | slackpkg | |
-| Android / Termux | pkg / apt | Never uses sudo |
-| macOS (Homebrew) | brew | |
-
-When a required external tool (like `7z`, `unrar`, `mpv`, `chafa`) is missing, CLIFM shows the exact install command for your distro and offers to run it for you.
+| Family | Distros | Package Manager |
+|--------|---------|----------------|
+| Arch | Arch, Manjaro, EndeavourOS, Artix, Garuda, CachyOS | pacman / yay / paru |
+| Debian | Debian, Ubuntu, Kali, Mint, Pop!_OS, Parrot, Raspbian | apt / nala |
+| Fedora | Fedora, RHEL, Rocky, AlmaLinux, Nobara | dnf5 / dnf / yum |
+| openSUSE | openSUSE Leap, Tumbleweed | zypper |
+| Alpine | Alpine, postmarketOS | apk |
+| Void | Void Linux | xbps-install |
+| Gentoo | Gentoo, Calculate | emerge |
+| NixOS | NixOS | nix-env |
+| Solus | Solus | eopkg |
+| Android | Termux | pkg / apt (no sudo) |
 
 ---
 
-## Interface Overview
+## Interface
 
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
-║ CLIFM v4.0  ARCH LINUX  [pacman]              [.][Name↑][GRID]      ║
-║ ▶ /home/ghost/projects                  © main.py, utils.py         ║
+║ CLIFM v4.0  KALI  [apt]                          [.][Name↑][GRID]    ║
+║ ▶ /home/kira/projects                    © main.py, utils.py         ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║                                                                      ║
-║  ┌─────────┐   ┌───────┐   ┌───────┐   ┌──┬──────┐                 ║
-║  │         │   │ .___. │   │ .___. │   │▓▓│      │                 ║
-║  │  [DIR]  │   │ .PY   │   │ .SH   │   │▓▓│ ZIP  │                 ║
-║  │         │   │       │   │       │   │▓▓│      │                 ║
-║  └─────────┘   └───────┘   └───────┘   └──┴──────┘                 ║
-║    src            main.py    build.sh    release.zip                 ║
+║  ┌─────────┐   ┌───────┐   ┌───────┐   ┌──┬──────┐                   ║
+║  │         │   │ .___. │   │ .___. │   │▓▓│      │                   ║
+║  │  [DIR]  │   │ .PY   │   │ .SH   │   │▓▓│ ZIP  │                   ║
+║  │         │   │       │   │       │   │▓▓│      │                   ║
+║  └─────────┘   └───────┘   └───────┘   └──┴──────┘                   ║
+║    src/           main.py    build.sh    release.zip                 ║
 ║                                                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ ↑↓:Nav  Ent:Open  C:Copy  X:Cut  P:Paste  D:Del  R:Rename  N:New   ║
-║ Z:Zip  E:Extract  I:Info  G:GoPath  /:Search  V:View  T:Sort  Q:Quit║
-║ Ready  OS:arch  family:arch  pkg:pacman                              ║
+║ ↑↓:Nav  Ent:Open  C:Copy  X:Cut  P:Paste  D:Del  B:Trash  R:Rename   ║
+║ Z:Zip  E:Extract  I:Info  G:GoPath  /:Search  M:Bookmarks  Q:Quit    ║
+║ Ready  OS:kali  family:debian  pkg:apt                               ║
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
-
-**Header** — shows current path, active clipboard contents, filter status, sort mode, view mode, hidden file toggle.
-
-**Content area** — either icon grid (big ASCII art icons, multiple per row) or list view (one item per row with permissions, size, date).
-
-**Footer** — all keybindings always visible. Status bar shows last action result.
 
 ---
 
 ## View Modes
 
-### Icon Grid View (default)
+### Icon Grid (default)
 
-Big 5-line ASCII art icons arranged in a grid. Each file type has a unique icon shape and color. Directories get a box-style folder icon. Archive files get a striped side. Selected item highlights in green.
+5-line ASCII art icons in a grid. Each file type has a distinct icon and color.
 
 ```
 ┌─────────┐    ┌───────┐    ┌──┬──────┐    ┌───────┐
@@ -103,14 +103,12 @@ Big 5-line ASCII art icons arranged in a grid. Each file type has a unique icon 
 │  [DIR]  │    │  .PY  │    │▓▓│ ZIP  │    │  PDF  │
 │         │    │       │    │▓▓│      │    │       │
 └─────────┘    └───────┘    └──┴──────┘    └───────┘
-  projects       main.py      backup.zip    report.pdf
+  projects       main.py     backup.zip    report.pdf
 ```
-
-Press `V` to switch to list view.
 
 ### List View
 
-One item per row. Shows: item number, mark indicator, file type icon, filename, permissions, size, last modified date.
+One item per row with permissions, size, and date. Selected item name turns bold green.
 
 ```
   1   [DIR]  projects          rwxr-xr-x    <DIR>  2026-04-10 18:55
@@ -118,25 +116,23 @@ One item per row. Shows: item number, mark indicator, file type icon, filename, 
   3   [ZIP]  backup.zip        rw-r--r--  892.0 KB  2026-04-08 09:33
 ```
 
-Selected item name turns **bold green** so you always know exactly where your cursor is. Executables show in **yellow**, directories in **blue**, regular files in **white**, symlinks in **cyan**.
-
-Press `V` to switch back to grid view.
+Press `V` to toggle between both views.
 
 ---
 
-## File Type Colors
+## Color Scheme
 
 | Color | Meaning |
 |-------|---------|
-| **Blue** | Directory |
 | **Bold Green** | Currently selected item |
+| **Blue** | Directory |
 | **Yellow** | Executable file |
-| **Green** | Script files (.py .sh .go .rs etc) |
-| **Magenta** | Media files (.mp3 .mp4 .mkv etc) |
+| **Green** | Script / code file |
+| **Magenta** | Media file |
 | **Red** | PDF, ISO, DEB, RPM |
-| **Cyan** | Config files (.conf .ini .env .toml) |
-| **Yellow (dim)** | Archive files (.zip .tar .gz .7z etc) |
-| **White** | Regular text and document files |
+| **Cyan** | Config / env file |
+| **Yellow (dim)** | Archive file |
+| **White** | Regular file |
 | **Dark grey** | Permissions, size, date columns |
 
 ---
@@ -147,239 +143,234 @@ Press `V` to switch back to grid view.
 
 | Key | Action |
 |-----|--------|
-| `↑` or `K` or `W` | Move cursor up |
-| `↓` or `J` or `S` | Move cursor down |
-| `←` (left arrow) | Go back in navigation history |
-| `→` (right arrow) | Go forward in navigation history |
+| `↑` `K` `W` | Move cursor up |
+| `↓` `J` `S` | Move cursor down |
+| `←` | Go back in navigation history |
+| `→` | Go forward in navigation history |
 | `Backspace` | Go to parent directory |
 | `Enter` | Open file or enter directory |
-| `PageUp` | Jump one full page up |
-| `PageDown` | Jump one full page down |
-| `Home` | Jump to first item |
-| `End` | Jump to last item |
-| `H` | Jump to home directory (~/) |
-| `G` | Go to any path (with live Tab completion) |
-| `1`–`9` then `Enter` | Jump to item by number (multi-digit supported) |
+| `PageUp` | Jump one page up |
+| `PageDown` | Jump one page down |
+| `Home` | First item |
+| `End` | Last item |
+| `H` | Jump to home directory |
+| `G` | Go to any path with live Tab completion |
+| `1`–`9` + `Enter` | Jump to item by number |
 
-### Selection and Marks
+### Multiselect
 
 | Key | Action |
 |-----|--------|
-| `Space` | Mark or unmark current item, cursor advances |
-| `A` | Mark all items / unmark all if all are marked |
+| `Space` | Mark or unmark current item |
+| `A` | Mark all / unmark all |
 | `Esc` | Clear all marks |
 
-Marked items show a `★` symbol next to them. All file operations (copy, cut, delete, compress) work on marked items when marks are active, or on the current cursor item when no marks are set.
-
-### Clipboard
-
-| Key | Action |
-|-----|--------|
-| `C` | Copy marked/current item(s) to clipboard |
-| `X` | Cut marked/current item(s) — moves on paste |
-| `P` | Paste clipboard contents into current directory |
-
-The clipboard persists as you navigate between directories. The header shows what is in the clipboard at all times. If you cut items and they no longer exist by the time you paste, CLIFM handles this gracefully and reports which items were missing.
-
-Name collision on paste is handled automatically — if a file with the same name exists, the pasted file is renamed to `filename_copy1`, `filename_copy2`, etc.
+Marked items show `★`. All operations work on all marked items when marks are active. When no marks are set, operations apply to the item under the cursor.
 
 ### File Operations
 
 | Key | Action |
 |-----|--------|
-| `D` | Delete marked/current item(s) — asks confirmation |
-| `R` | Rename current item |
-| `N` | Create new file or directory |
-| `Z` | Compress marked/current item(s) |
-| `E` | Extract archive file |
-| `L` | Change permissions (chmod) |
-| `O` | Open file with a specific command |
-| `I` | Show detailed properties panel |
-| `!` | Open a shell in the current directory |
+| `C` | Copy marked/current to clipboard |
+| `X` | Cut — moves on paste |
+| `P` | Paste clipboard here |
+| `D` | Delete permanently — asks confirmation |
+| `B` | Move to Trash — recoverable |
+| `R` | Rename — Bulk rename when multiple marks active |
+| `N` | New file or directory |
+| `Z` | Compress |
+| `E` | Extract archive |
+| `L` | chmod — change permissions |
+| `O` | Open with a specific command |
+| `I` | Properties panel |
+| `!` | Open shell in current directory |
 
-### Search and Navigation
+### Bookmarks
 
 | Key | Action |
 |-----|--------|
-| `G` | Go to path with live completion |
-| `/` or `F` | Open search and filter menu |
+| `M` | Open bookmarks manager |
+| `M` → `A` | Bookmark current directory |
+| `M` → `N` | Bookmark any path with Tab completion |
+| `M` → `D` | Delete a bookmark |
+| `M` → number | Navigate to that bookmark instantly |
 
-**Search menu options:**
+### Search Menu — press `/` or `F`
 
 | Option | What it does |
 |--------|-------------|
-| `1` Filter | Hides all files in current dir that don't match your pattern. Fast, instant. Clears on dir change. |
-| `2` Deep search | Recursively searches all subdirectories from current location. Shows results 7 at a time. |
-| `3` Jump to path | Same as G — live Tab completion path input. |
-| `4` Clear filter | Removes any active filter. |
-| `5` Find | Searches `~/` first, then the full system if nothing found. Skips `/proc` `/sys` `/dev`. Ctrl+C to abort. |
+| `1` | Filter current directory by filename |
+| `2` | Deep recursive search from current directory |
+| `3` | Jump to path with Tab completion |
+| `4` | Clear active filter |
+| `5` | Find — searches `~/` first, asks to expand systemwide |
+| `6` | Open Trash bin |
 
-Results from options 2 and 5 are shown in a scrollable browser — 7 results at a time. Use `↑`/`↓` arrows to page through. Type a number and press Enter to navigate to that result.
+Search results show 7 at a time. `↑` / `↓` to page, number + Enter to navigate.
 
 ### View and Sort
 
 | Key | Action |
 |-----|--------|
-| `V` | Toggle between icon grid and list view |
-| `T` | Cycle through sort modes |
-| `.` | Toggle hidden files (dotfiles) on/off |
-| `F5` | Refresh current directory |
-
-**Sort modes** (cycles with `T`):
-
-`Name↑` → `Name↓` → `Size↑` → `Size↓` → `Time↑` → `Time↓` → `Ext` → back to `Name↑`
-
-### Other
-
-| Key | Action |
-|-----|--------|
-| `?` or `F1` | Show help screen with all keybindings |
+| `V` | Toggle icon grid / list view |
+| `T` | Cycle sort mode |
+| `.` | Toggle hidden files |
+| `F5` | Refresh |
+| `?` | Help screen |
 | `Q` | Quit |
+
+**Sort modes:** Name↑ → Name↓ → Size↑ → Size↓ → Time↑ → Time↓ → Ext
 
 ---
 
-## Go to Path — G key
+## Go to Path — G
 
-Press `G` from anywhere. The screen clears and shows a live path input:
+Press `G`. Completions appear in real time as you type:
 
 ```
   Go to Path  Type path, Tab=complete, Enter=go, Esc=cancel, Ctrl+U=clear
 
-  > ~/Do
-    Documents/
-    Downloads/
-    dotfiles/
+  > ~/pro
+    projects/
+    programs/
 ```
 
-As you type, matching completions appear below the prompt in real time. Tab key completes the longest common prefix. If only one match exists, it is filled in automatically. Press `Enter` to navigate. Press `Esc` to cancel. Press `Ctrl+U` to clear the whole line.
-
-Works with `~` expansion. Works for both directories (navigates into them) and files (navigates to the parent directory and places the cursor on the file).
+Tab fills the longest common prefix. One match auto-completes fully. `~` expansion supported.
 
 ---
 
-## Compression and Extraction
+## Trash Bin
 
-### Compress (`Z`)
+Press `B` on any file or folder to move it to `~/.local/share/Trash/files`.
 
-Select items with `Space` or just be on a file, press `Z`. Choose format:
+Access trash browser via `/` → `6`:
 
-| Format | Tool required | Notes |
-|--------|-------------|-------|
-| `.zip` | Python built-in | Always works |
-| `.tar.gz` | Python built-in | Always works |
-| `.tar.bz2` | Python built-in | Always works |
-| `.tar.xz` | Python built-in | Always works |
-| `.tar` | Python built-in | Always works |
-| `.gz` | Python built-in | Single file only |
-| `.bz2` | Python built-in | Single file only |
-| `.xz` | Python built-in | Single file only |
-| `.7z` | `7z` binary | CLIFM offers to install if missing |
-| `.zst` | `zstd` binary | CLIFM offers to install if missing |
+```
+  Trash  /home/kira/.local/share/Trash/files
 
-If output file already exists, CLIFM asks before overwriting.
+     1  [FILE]  oldreport.pdf     2.3 KB
+     2  [DIR]   backup-folder
+     3  [FILE]  config.json       1.1 KB
 
-### Extract (`E`)
+  [number] + Enter  → Restore that item
+  RA               → Restore ALL
+  D[number]        → Permanently delete item  e.g. D3
+  DA               → Permanently delete ALL trash
+  O                → Navigate into trash folder in CLIFM
+  Q or Enter       → Close
+```
 
-Place cursor on any archive file, press `E`. CLIFM detects the format from the extension and extracts it. Supports: `.zip` `.tar` `.tar.gz` `.tgz` `.tar.bz2` `.tar.xz` `.tar.zst` `.gz` `.bz2` `.xz` `.7z` `.rar` `.zst`.
+When restoring, CLIFM asks where to put the files:
 
-For `.7z` and `.rar`, CLIFM checks if the required binary is installed and offers to install it using your distro's package manager if not.
+```
+  Restore to where?
+  1. Restored folder  (~/Restored — created if needed)
+  2. Type a path       (Tab to complete)
+  Q. Cancel
+```
+
+Option 1 collects everything into `~/Restored/` — home directory stays clean. Option 2 lets you Tab-complete any destination path.
+
+---
+
+## Bookmarks
+
+Press `M`:
+
+```
+  Bookmarks / Shortcuts  (stored inside clifm.py)
+
+     1.  myproject          /home/kira/projects/clifm
+     2.  configs            /etc/nginx
+
+  A. Add current directory
+  N. Add custom path
+  D. Delete a bookmark
+  Enter/Q. Cancel
+```
+
+Type a number to jump to that path instantly. Bookmarks are written into the `_BOOKMARKS_DATA` line inside `clifm.py` — zero external files, zero config directories, fully self-contained.
+
+---
+
+## Bulk Rename
+
+Mark multiple files with `Space`, press `R`. Your editor opens with one filename per line. Edit names, save, close. CLIFM renames every file whose name changed. Unchanged lines are skipped. Conflicts are reported.
+
+---
+
+## Find — Two-Stage Search
+
+Press `/` → `5`:
+
+```
+  Find: fonts
+
+  Searching ~/ ...
+  Found 3 result(s) in ~/
+
+  Also search the full system?  (finds outside ~/, takes longer)
+  Expand to full system? [y/N]:
+```
+
+Found in `~/` — shows results and asks to expand. Nothing in `~/` — goes full system automatically. Skips `/proc` `/sys` `/dev` `/run` `/snap`. Ctrl+C aborts cleanly.
+
+---
+
+## Compression
+
+Press `Z` on any file, folder, or selection of marked items:
+
+| Format | Requires |
+|--------|---------|
+| `.zip` `.tar` `.tar.gz` `.tar.bz2` `.tar.xz` `.gz` `.bz2` `.xz` | Python built-in — always works |
+| `.7z` | `7z` binary — CLIFM offers to install |
+| `.zst` | `zstd` binary — CLIFM offers to install |
 
 ---
 
 ## File Opening
 
-Press `Enter` on a file. CLIFM detects the file type and opens it with the best available tool:
+Press `Enter` on any file:
 
-| File type | Tools tried in order |
-|-----------|---------------------|
-| Text, code, config, scripts | nvim → vim → nano → micro → helix → bat → less → more → raw output |
-| Images | chafa → feh → sxiv → nsxiv → imv |
-| Video/Audio | mpv → vlc → mplayer |
-| PDF | zathura → mupdf → evince → okular |
-| Everything else | xdg-open → less → more |
+| Type | Tools tried in order |
+|------|---------------------|
+| Text / code / config | nvim → vim → nano → micro → bat → less → raw output |
 
-`chafa` is especially useful — it renders images as colored ASCII art directly in the terminal, no GUI needed.
-
-If no viewer is found, CLIFM shows the exact install command for your distro.
 
 ---
 
-## Properties Panel (`I`)
+## Edge Cases Handled
 
-Press `I` on any file or directory to see:
-
-```
-╔═══════════════════════════════════════╗
-║ Properties: main.py                   ║
-╠═══════════════════════════════════════╣
-║  Name:               main.py          ║
-║  Path:               /home/ghost/...  ║
-║  Type:               File             ║
-║  Size:               12.8 KB (13107)  ║
-║  Permissions:        rw-r--r-- (0644) ║
-║  Owner UID:          1000             ║
-║  Group GID:          1000             ║
-║  Modified:           2026-04-10 20:01 ║
-║  Accessed:           2026-04-10 20:05 ║
-║  Changed:            2026-04-10 20:01 ║
-║  Extension:          .py              ║
-║  Executable:         No               ║
-║  MIME:               Python script    ║
-║  Inode:              2883622          ║
-║  Links:              1                ║
-╚═══════════════════════════════════════╝
-```
-
-For directories, shows direct children count (files and subdirectories).
+- Directory deleted while inside it — walks up to nearest existing parent automatically
+- File deleted between listing and opening — reports it, does not crash
+- Permission denied on directory — shows empty, does not crash
+- Broken symlinks — shown correctly, does not crash
+- Cursor out of range after delete — clamped to last valid item
+- Marks pointing to deleted files — removed before each operation
+- Clipboard items deleted before paste — reports missing, pastes the rest
+- Rename to existing name — reports conflict, no overwrite
+- Archive extraction failure — reports error, does not crash
+- Search on huge directories — Ctrl+C aborts cleanly at any point
 
 ---
 
-## Shell Escape (`!`)
+## Termux / Android
 
-Press `!` to drop into a shell inside the current directory. Your `$SHELL` environment variable is used (bash, zsh, fish, etc.). Type `exit` to return to CLIFM exactly where you left off.
-
----
-
-## Edge Case Handling
-
-CLIFM is built to never crash, no matter what the filesystem throws at it.
-
-- **Directory deleted while inside it** — CLIFM walks up to the nearest existing parent automatically on the next render cycle, shows a warning in the status bar.
-- **File deleted between listing and opening** — Reports "file no longer exists" instead of crashing.
-- **Permission denied on directory** — Shows empty directory instead of crashing.
-- **Broken symlinks** — Shows the symlink and its target path, does not crash on `stat()`.
-- **Cursor out of range after delete** — Automatically clamped to the last valid item.
-- **Marks pointing to deleted files** — Silently removed from mark set before each operation.
-- **Clipboard items deleted before paste** — Reports how many items were missing, pastes the rest.
-- **Rename to existing filename** — Reports conflict, does not overwrite.
-- **New file/dir with `/` in name** — Rejected with error message.
-- **Archive extraction destination fails to create** — Reports the error, does not crash.
-- **Terminal too small** — Gracefully degrades, minimum dimensions enforced.
-- **Search on huge directories** — Ctrl+C aborts cleanly at any point.
-
----
-
-## Termux / Android Notes
-
-CLIFM fully supports Android via Termux. Detection is automatic.
-
-- Never uses `sudo` — Termux does not have it
-- Uses `pkg install` or `apt install` directly
-- Home directory is correctly detected via `$HOME` which Termux sets to `/data/data/com.termux/files/home`
-- All Python stdlib operations work identically on Termux
-- External tools like `nvim`, `mpv`, `chafa` are available via `pkg install`
+Detected automatically. Never uses sudo. Uses `pkg install` or `apt install` directly. All operations work identically.
 
 ---
 
 ## Technical Notes
 
-- **Pure Python stdlib** — `os`, `sys`, `shutil`, `stat`, `tarfile`, `zipfile`, `gzip`, `bz2`, `lzma`, `termios`, `tty`, `select`, `fnmatch`, `readline`, `subprocess`, `platform`, `pathlib`
-- **Zero pip dependencies** — copy one `.py` file, run it
-- **Raw terminal input** — uses `os.read(fd, 1)` directly on the kernel file descriptor, bypassing Python's `BufferedReader` and `TextIOWrapper` entirely — this is why keypresses are always reliable
-- **Non-blocking escape sequence detection** — uses `select()` with 80ms timeout to distinguish a bare `Esc` keypress from arrow key sequences like `\x1b[A`
-- **Navigation history** — 50-entry deque, back and forward like a browser
-- **Clipboard survives directory changes** — copy in `/etc`, navigate to `/home`, paste
-- **Sort is stable** — directories always listed before files regardless of sort mode
+- Pure Python stdlib — no pip, one file
+- `os.read(fd, 1)` directly on the kernel fd — bypasses all Python buffering layers
+- `termios` / `tty` / `select()` for reliable raw single-keypress input
+- Bookmarks written into `_BOOKMARKS_DATA` line inside `clifm.py` on save
+- Navigation history — 50-entry deque, back and forward
+- Clipboard survives directory changes
+- Trash follows XDG spec — `~/.local/share/Trash/files`
+- Marks cleaned automatically before every operation
 
 ---
 
@@ -387,16 +378,16 @@ CLIFM fully supports Android via Termux. Detection is automatic.
 
 | Version | Changes |
 |---------|---------|
-| v4.0 | os.read() kernel-level input, full distro support, Termux support, realtime path completion, scrollable search results, EXE/selected color distinction |
-| v3.0 | Icon grid view, list view, browse_results pager, do_find systemwide search |
-| v2.0 | Compression/extraction, properties panel, search, filter, navigation history |
-| v1.0 | Initial release — navigation, copy, cut, paste, delete, rename |
+| v4.0 | Trash with smart restore, self-contained bookmarks, bulk rename, two-stage find, scrollable results browser, multiselect on all ops, 30+ distro support, Termux support, real-time path completion |
+| v3.0 | Icon grid view, list view, systemwide find |
+| v2.0 | Compression, extraction, properties, search, filter, navigation history |
+| v1.0 | Navigation, copy, cut, paste, delete, rename |
 
 ---
 
 ## License
 
-MIT License. Use it, modify it, distribute it. Credit appreciated but not required.
+MIT — use it, modify it, distribute it.
 
 ---
 

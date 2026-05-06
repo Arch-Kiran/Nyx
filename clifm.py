@@ -86,6 +86,11 @@ def read_key():
 class OSInfo:
     def __init__(self):
         self.name = platform.system().lower()
+        self.is_termux = (
+            "com.termux" in os.environ.get("PREFIX", "") or
+            os.path.exists("/data/data/com.termux") or
+            os.environ.get("TERMUX_VERSION") is not None
+        )
         self.distro = self._distro()
         self.pkg = self._pkg()
 
@@ -118,6 +123,22 @@ class OSInfo:
         return None
 
 OS = OSInfo()
+_ORIG_TERM = None
+
+def _save_term():
+    global _ORIG_TERM
+    try:
+        _ORIG_TERM = termios.tcgetattr(sys.stdin.fileno())
+    except:
+        pass
+
+def _restore_term():
+    if _ORIG_TERM is not None:
+        try:
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _ORIG_TERM)
+        except:
+            pass
+
 
 # ─── TERMINAL ────────────────────────────────────────────────────────────────
 def term_size():
@@ -379,17 +400,17 @@ def render_footer(cols, status):
         (f"{C.BYELLOW}X{C.RESET}","Cut"),
         (f"{C.BYELLOW}P{C.RESET}","Paste"),
         (f"{C.BRED}D{C.RESET}","Del"),
+        (f"{C.BYELLOW}B{C.RESET}","Trash"),
         (f"{C.BCYAN}R{C.RESET}","Rename"),
         (f"{C.BCYAN}N{C.RESET}","New"),
-        (f"{C.BMAGENTA}Z{C.RESET}","Compress"),
+        (f"{C.BMAGENTA}Z{C.RESET}","Zip"),
         (f"{C.BMAGENTA}E{C.RESET}","Extract"),
         (f"{C.BBLUE}I{C.RESET}","Info"),
         (f"{C.BWHITE}/{C.RESET}","Search"),
         (f"{C.BWHITE}G{C.RESET}","GoPath"),
-        (f"{C.BBLACK}.{C.RESET}","Hidden"),
+        (f"{C.BCYAN}M{C.RESET}","Bookmarks"),
         (f"{C.BWHITE}V{C.RESET}","View"),
         (f"{C.BWHITE}T{C.RESET}","Sort"),
-        (f"{C.BWHITE}!{C.RESET}","Shell"),
         (f"{C.BRED}Q{C.RESET}","Quit"),
     ]
     mid = len(k)//2
@@ -598,6 +619,52 @@ def render_list(entries, selected_idx, cols, rows, marked, scroll_offset):
     print(f"{C.BBLACK}║{C.RESET}{pad_to(info, inner)}{C.BBLACK}║{C.RESET}")
 
     return scroll_offset
+
+def _read_line(prompt_text, default=""):
+    """Read a line of input character by character in raw mode.
+    Returns (text, cancelled). cancelled=True if Esc or Ctrl+C pressed."""
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    tty.setraw(fd)
+    text = default
+    sys.stdout.write(prompt_text + text)
+    sys.stdout.flush()
+    cancelled = False
+    try:
+        while True:
+            b = os.read(fd, 1)
+            if not b:
+                break
+            n = b[0]
+            if n in (10, 13):       # Enter
+                break
+            elif n == 27:           # ESC
+                cancelled = True
+                text = ""
+                break
+            elif n == 3:            # Ctrl+C
+                cancelled = True
+                text = ""
+                break
+            elif n == 21:           # Ctrl+U clear line
+                sys.stdout.write("\r" + " " * (len(prompt_text) + len(text) + 2))
+                sys.stdout.write("\r" + prompt_text)
+                sys.stdout.flush()
+                text = ""
+            elif n in (127, 8):     # Backspace
+                if text:
+                    text = text[:-1]
+                    sys.stdout.write("\b \b")
+                    sys.stdout.flush()
+            elif 32 <= n <= 126 or n > 127:  # printable
+                text += chr(n)
+                sys.stdout.write(chr(n))
+                sys.stdout.flush()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    return text.strip(), cancelled
 
 # ─── INPUT LINE (for prompts, restores cooked mode) ──────────────────────────
 def ask(msg, default=""):
@@ -873,53 +940,73 @@ def do_search(base, pattern, max_r=300):
     except: pass
     return results
 
-def do_find(pattern):
-    """
-    Find files/folders by name.
-    Step 1: search ~/  (fast, most likely location)
-    Step 2: if nothing found, search systemwide from /
-    Skips /proc /sys /dev to avoid hangs.
-    Returns list of Path objects.
-    """
-    SKIP = {"/proc", "/sys", "/dev", "/run", "/snap"}
-    max_r = 200
+_FIND_SKIP = {"/proc", "/sys", "/dev", "/run", "/snap"}
+_FIND_MAX  = 200
 
-    def search_tree(base, pat, results):
-        try:
-            for item in Path(base).rglob("*"):
-                # Skip noisy system dirs
-                try:
-                    parts = item.parts
-                    if any(("/" + p) in SKIP or p in SKIP for p in parts[:3]):
-                        continue
-                except:
+def _search_tree(base, pattern, results):
+    """Walk base recursively, append matching names to results. Ctrl+C safe."""
+    try:
+        for item in Path(base).rglob("*"):
+            try:
+                if any(("/" + p) in _FIND_SKIP or p in _FIND_SKIP
+                       for p in item.parts[:3]):
                     continue
-                if fnmatch.fnmatch(item.name.lower(), f"*{pat.lower()}*"):
-                    results.append(item)
-                if len(results) >= max_r:
-                    return True  # cap hit
-        except (KeyboardInterrupt, PermissionError):
-            pass
-        return False
+            except:
+                continue
+            if fnmatch.fnmatch(item.name.lower(), f"*{pattern.lower()}*"):
+                results.append(item)
+            if len(results) >= _FIND_MAX:
+                return True
+    except (KeyboardInterrupt, PermissionError):
+        pass
+    return False
 
+def do_find_home(pattern):
+    """Search only inside ~/. Returns list of Path objects."""
     results = []
     print(f"  {C.BBLACK}Searching ~/ ...{C.RESET}", end="\r", flush=True)
     try:
-        capped = search_tree(Path.home(), pattern, results)
-    except KeyboardInterrupt:
-        return results
-
-    if results:
-        return results  # found in home, done
-
-    # Nothing in ~/ — go systemwide
-    print(f"  {C.BBLACK}Not found in ~/  Searching system (Ctrl+C to stop)...{C.RESET}", flush=True)
-    try:
-        search_tree("/", pattern, results)
+        _search_tree(Path.home(), pattern, results)
     except KeyboardInterrupt:
         pass
-
     return results
+
+def do_find_system(pattern, existing=None):
+    """
+    Search systemwide from /, skipping home dir to avoid duplicates.
+    existing = list of results already found in home (to skip re-adding them).
+    Returns list of Path objects (new finds only, not duplicates).
+    """
+    existing_set = set(str(p) for p in (existing or []))
+    results = []
+    print(f"  {C.BBLACK}Searching full system (Ctrl+C to stop)...{C.RESET}",
+          flush=True)
+    try:
+        for item in Path("/").rglob("*"):
+            try:
+                # Skip home (already searched) and system dirs
+                if str(item).startswith(str(Path.home())):
+                    continue
+                if any(("/" + p) in _FIND_SKIP or p in _FIND_SKIP
+                       for p in item.parts[:3]):
+                    continue
+            except:
+                continue
+            if fnmatch.fnmatch(item.name.lower(), f"*{pattern.lower()}*"):
+                if str(item) not in existing_set:
+                    results.append(item)
+            if len(results) >= _FIND_MAX:
+                break
+    except (KeyboardInterrupt, PermissionError):
+        pass
+    return results
+
+def do_find(pattern):
+    """Legacy wrapper — searches home first then system if nothing found."""
+    results = do_find_home(pattern)
+    if results:
+        return results
+    return do_find_system(pattern)
 
 
 def browse_results(results, cols):
@@ -1052,14 +1139,29 @@ def show_help(cols):
             ("Esc",            "Clear all marks"),
         ]),
         ("File Operations", [
-            ("D",              "Delete (confirm required)"),
-            ("R",              "Rename"),
+            ("D",              "Delete permanently (confirmation required)"),
+            ("B",              "Trash — move item(s) to Trash  |  B alone = open Trash browser"),
+            ("",               "  Trash browser: restore, restore all, delete, clear all"),
+            ("R",              "Rename  |  R with multiple marks = Bulk rename"),
             ("N",              "New file or directory"),
             ("Z",              "Compress  (zip/tar.gz/tar.xz/7z/zst…)"),
             ("E",              "Extract archive"),
             ("L",              "chmod  (change permissions)"),
             ("O",              "Open with specific command"),
             ("!",              "Open shell in current directory"),
+        ]),
+        ("Bookmarks", [
+            ("M",              "Open bookmarks manager"),
+            ("M then A",       "Bookmark current directory"),
+            ("M then N",       "Bookmark any path (Tab completion)"),
+            ("M then D",       "Delete a bookmark"),
+            ("M then 1-9",     "Navigate to that bookmark instantly"),
+        ]),
+        ("Multiselect", [
+            ("Space",          "Mark/unmark item — cursor advances"),
+            ("A",              "Mark all  /  unmark all"),
+            ("Esc",            "Clear all marks"),
+            ("C/X/D/B/Z/R",    "All ops work on marks when marks are active"),
         ]),
         ("View & Search", [
             ("V",              "Toggle icon grid ↔ list view"),
@@ -1219,8 +1321,462 @@ def realtime_path_input():
     sys.stdout.flush()
     return text.strip(), cancelled
 
+# ─── TRASH ────────────────────────────────────────────────────────────────────
+def get_trash_dir():
+    """
+    Returns the trash directory path following XDG spec.
+    ~/.local/share/Trash/files for home dir files.
+    Creates it if it doesn't exist.
+    """
+    if OS.is_termux:
+        trash = Path.home() / ".trash"
+    else:
+        trash = Path.home() / ".local" / "share" / "Trash" / "files"
+    try:
+        trash.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        trash = Path.home() / ".trash"
+        trash.mkdir(parents=True, exist_ok=True)
+    return trash
+
+def trash_items(items):
+    """
+    Move items to trash instead of deleting permanently.
+    Returns (success_count, errors_list).
+    Handles name collisions in trash by appending timestamp.
+    """
+    trash_dir = get_trash_dir()
+    ok = 0
+    errs = []
+    for item in items:
+        try:
+            if not item.exists() and not item.is_symlink():
+                errs.append(f"{item.name}: does not exist")
+                continue
+            dst = trash_dir / item.name
+            # Handle name collision
+            if dst.exists():
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                dst = trash_dir / f"{item.stem}_{ts}{item.suffix}"
+            shutil.move(str(item), str(dst))
+            ok += 1
+        except Exception as e:
+            errs.append(f"{item.name}: {e}")
+    return ok, errs
+
+def _pick_restore_dest():
+    """
+    Ask user where to restore to.
+    Returns a Path destination directory or None if cancelled.
+    Options:
+      1 = ~/Restored folder (safe default)
+      2 = Type a path with Tab completion
+      3 = Browse with CLIFM navigation (opens realtime_path_input)
+    """
+    restored_dir = Path.home() / "Restored"
+
+    print(f"\n  {C.BCYAN}Restore to where?{C.RESET}")
+    print(f"  {C.BWHITE}1{C.RESET}. Restored folder  "
+          f"{C.BBLACK}(~/Restored — created if needed){C.RESET}")
+    print(f"  {C.BWHITE}2{C.RESET}. Type a path       "
+          f"{C.BBLACK}(Tab to complete){C.RESET}")
+    print(f"  {C.BWHITE}Q{C.RESET}. Cancel")
+
+    choice, cancelled = _read_line("  Choice [1/2/Q]: ", "")
+    if cancelled or choice.strip().upper() == "Q":
+        return None
+
+    ch = choice.strip()
+
+    if ch == "1" or ch == "":
+        # ~/Restored
+        try:
+            restored_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"  {C.BRED}Cannot create ~/Restored: {e}{C.RESET}")
+            input(f"  {C.BBLACK}[Enter]{C.RESET}")
+            return None
+        return restored_dir
+
+    elif ch == "2":
+        # Type path with Tab completion
+        path_str, cancelled2 = realtime_path_input()
+        if cancelled2 or not path_str:
+            return None
+        exp = Path(os.path.expanduser(path_str.strip())).resolve()
+        if exp.is_dir():
+            return exp
+        elif not exp.exists():
+            # Ask to create it
+            print(f"\n  {C.BYELLOW}'{exp}' does not exist.{C.RESET}")
+            conf, _ = _read_line("  Create it? [y/N]: ", "")
+            if conf.strip().lower() == "y":
+                try:
+                    exp.mkdir(parents=True, exist_ok=True)
+                    return exp
+                except Exception as e:
+                    print(f"  {C.BRED}Cannot create: {e}{C.RESET}")
+                    input(f"  {C.BBLACK}[Enter]{C.RESET}")
+                    return None
+            return None
+        else:
+            print(f"  {C.BRED}That path is a file, not a directory.{C.RESET}")
+            input(f"  {C.BBLACK}[Enter]{C.RESET}")
+            return None
+
+    return None
+
+def trash_menu(hidden, sort_mode, HIST):
+    """
+    Interactive trash browser.
+    Shows contents of trash dir.
+    Options: restore item, restore all, delete permanently, clear all trash.
+    Returns (new_cwd, jumped).
+    """
+    import select as _tsel
+
+    while True:
+        trash_dir = get_trash_dir()
+        _restore_term()
+        clear()
+
+        # Read trash contents
+        try:
+            items = sorted(trash_dir.iterdir(), key=lambda x: x.name.lower())
+        except Exception:
+            items = []
+
+        print(f"\n  {C.BCYAN}Trash{C.RESET}  {C.BBLACK}{trash_dir}{C.RESET}\n")
+
+        if items:
+            for i, item in enumerate(items, 1):
+                try:
+                    is_dir = item.is_dir()
+                    icon = f"{C.BBLUE}[DIR]{C.RESET}" if is_dir else f"{C.BBLACK}[FILE]{C.RESET}"
+                    size = ""
+                    if item.is_file():
+                        s = item.stat().st_size
+                        size = fmt_size(s).strip()
+                    print(f"  {C.BWHITE}{i:>4}{C.RESET}  {icon}  "
+                          f"{C.WHITE}{item.name}{C.RESET}  {C.BBLACK}{size}{C.RESET}")
+                except Exception:
+                    print(f"  {C.BWHITE}{i:>4}{C.RESET}  {C.BRED}(error reading){C.RESET}")
+        else:
+            print(f"  {C.BBLACK}Trash is empty.{C.RESET}")
+
+        print(f"\n  {C.BBLACK}{'─'*50}{C.RESET}")
+        print(f"  {C.BWHITE}[number]{C.RESET} + Enter  {C.BBLACK}→{C.RESET} Restore that item to ~/")
+        print(f"  {C.BWHITE}RA{C.RESET}               {C.BBLACK}→{C.RESET} Restore ALL to ~/")
+        print(f"  {C.BWHITE}D[number]{C.RESET}        {C.BBLACK}→{C.RESET} Permanently delete that item  e.g. D3")
+        print(f"  {C.BWHITE}DA{C.RESET}               {C.BBLACK}→{C.RESET} Permanently delete ALL trash")
+        print(f"  {C.BWHITE}O{C.RESET}                {C.BBLACK}→{C.RESET} Navigate into trash folder")
+        print(f"  {C.BWHITE}Q{C.RESET} or Enter       {C.BBLACK}→{C.RESET} Close")
+        print(f"\n  {C.BBLACK}Example: type 3 then Enter to restore item 3{C.RESET}")
+
+        choice, cancelled = _read_line("  Action: ", "")
+        if cancelled:
+            return None, False
+
+        choice = choice.strip()
+        cu = choice.upper()
+
+        if cu in ("Q", ""):
+            return None, False
+
+        elif cu == "O":
+            # Navigate to trash folder itself
+            HIST.go(trash_dir)
+            return trash_dir, True
+
+        elif cu == "RA":
+            if not items:
+                continue
+            dest_dir = _pick_restore_dest()
+            if dest_dir is None:
+                continue
+            ok = 0
+            errs = []
+            for item in items:
+                dst = dest_dir / item.name
+                if dst.exists():
+                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    dst = dest_dir / f"{item.stem}_{ts}{item.suffix}"
+                try:
+                    shutil.move(str(item), str(dst))
+                    ok += 1
+                except Exception as e:
+                    errs.append(f"{item.name}: {e}")
+            print(f"\n  {C.BGREEN}Restored {ok} item(s) → {dest_dir}{C.RESET}")
+            if errs:
+                print(f"  {C.BRED}Errors: {'; '.join(errs)}{C.RESET}")
+            input(f"  {C.BBLACK}[Enter]{C.RESET}")
+
+        elif cu == "DA":
+            # Clear all trash permanently
+            if not items:
+                continue
+            sys.stdout.write(f"\n  {C.BRED}Delete ALL {len(items)} items permanently? [y/N]: {C.RESET}")
+            sys.stdout.flush()
+            conf, _ = _read_line("", "")
+            if conf.strip().lower() == "y":
+                ok = 0
+                errs = []
+                for item in items:
+                    try:
+                        if item.is_dir() and not item.is_symlink():
+                            shutil.rmtree(str(item))
+                        else:
+                            item.unlink()
+                        ok += 1
+                    except Exception as e:
+                        errs.append(f"{item.name}: {e}")
+                print(f"\n  {C.BGREEN}Permanently deleted {ok} item(s){C.RESET}")
+                if errs:
+                    print(f"  {C.BRED}Errors: {'; '.join(errs)}{C.RESET}")
+                input(f"  {C.BBLACK}[Enter]{C.RESET}")
+
+        elif choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(items):
+                item = items[idx]
+                dest_dir = _pick_restore_dest()
+                if dest_dir is None:
+                    continue
+                dst = dest_dir / item.name
+                if dst.exists():
+                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    dst = dest_dir / f"{item.stem}_{ts}{item.suffix}"
+                try:
+                    shutil.move(str(item), str(dst))
+                    print(f"\n  {C.BGREEN}Restored: {item.name}{C.RESET}")
+                    print(f"  {C.BBLACK}→ {dst}{C.RESET}")
+                except Exception as e:
+                    print(f"\n  {C.BRED}Error: {e}{C.RESET}")
+                input(f"  {C.BBLACK}[Enter]{C.RESET}")
+
+        elif choice.upper().startswith("D") and choice[1:].strip().isdigit():
+            # D3 = delete item 3 permanently
+            idx = int(choice[1:].strip()) - 1
+            if 0 <= idx < len(items):
+                item = items[idx]
+                sys.stdout.write(f"\n  {C.BRED}Delete '{item.name}' permanently? [y/N]: {C.RESET}")
+                sys.stdout.flush()
+                conf, _ = _read_line("", "")
+                if conf.strip().lower() == "y":
+                    try:
+                        if item.is_dir() and not item.is_symlink():
+                            shutil.rmtree(str(item))
+                        else:
+                            item.unlink()
+                        print(f"\n  {C.BGREEN}Deleted: {item.name}{C.RESET}")
+                    except Exception as e:
+                        print(f"\n  {C.BRED}Error: {e}{C.RESET}")
+                    input(f"  {C.BBLACK}[Enter]{C.RESET}")
+
+# ─── BOOKMARKS ────────────────────────────────────────────────────────────────
+# ── BOOKMARKS stored inside clifm.py itself ──
+# This line is read and written by load/save_bookmarks. Do not edit manually.
+_BOOKMARKS_DATA = {"Shared Folder": "/mnt/hgfs/Shared Folder", "Universal Shared": "/mnt/hgfs/Universal Shared"}
+
+def load_bookmarks():
+    """Load bookmarks from the _BOOKMARKS_DATA dict embedded in this script."""
+    return dict(_BOOKMARKS_DATA)
+
+def save_bookmarks(bmarks):
+    """
+    Save bookmarks by rewriting _BOOKMARKS_DATA inside this script file.
+    Finds the line starting with '_BOOKMARKS_DATA = ' and replaces it.
+    No external files created.
+    """
+    import json
+    try:
+        script_path = Path(__file__).resolve()
+        lines = script_path.read_text(encoding='utf-8').splitlines(keepends=True)
+        new_line = f"_BOOKMARKS_DATA = {json.dumps(bmarks)}\n"
+        for i, line in enumerate(lines):
+            if line.startswith("_BOOKMARKS_DATA = "):
+                lines[i] = new_line
+                script_path.write_text("".join(lines), encoding='utf-8')
+                # Update in-memory too
+                global _BOOKMARKS_DATA
+                _BOOKMARKS_DATA = dict(bmarks)
+                return True
+        return False
+    except Exception:
+        return False
+
+def bookmarks_menu(cwd, hidden, sort_mode, HIST):
+    """
+    Interactive bookmarks manager.
+    Shows numbered list of saved bookmarks.
+    Options: go to bookmark, add current dir, delete bookmark.
+    Returns (new_cwd, sel, changed) — changed=True means navigate.
+    """
+    while True:
+        bmarks = load_bookmarks()
+        _restore_term()
+        clear()
+        inner = term_size()[0] - 2
+        print(f"\n  {C.BCYAN}Bookmarks / Shortcuts{C.RESET}  "
+              f"{C.BBLACK}(stored inside clifm.py){C.RESET}\n")
+
+        if bmarks:
+            keys = list(bmarks.keys())
+            for i, name in enumerate(keys, 1):
+                path = bmarks[name]
+                exists = Path(path).exists()
+                status = C.BGREEN if exists else C.BRED
+                print(f"  {C.BWHITE}{i:>3}{C.RESET}. "
+                      f"{C.BYELLOW}{name:<20}{C.RESET} "
+                      f"{status}{path}{C.RESET}")
+        else:
+            print(f"  {C.BBLACK}No bookmarks saved yet.{C.RESET}")
+
+        print(f"\n  {C.BBLACK}{'─'*40}{C.RESET}")
+        print(f"  {C.BWHITE}A{C.RESET}. Add current directory  "
+              f"{C.BBLACK}({cwd}){C.RESET}")
+        print(f"  {C.BWHITE}N{C.RESET}. Add custom path")
+        print(f"  {C.BWHITE}D{C.RESET}. Delete a bookmark")
+        print(f"  {C.BWHITE}Enter/Q{C.RESET}. Cancel\n")
+
+        choice, cancelled = _read_line("  Choice: ", "")
+        if cancelled or choice.strip().upper() in ("", "Q"):
+            return cwd, 0, False
+
+        choice = choice.strip()
+
+        # Navigate to numbered bookmark
+        if choice.isdigit():
+            idx = int(choice) - 1
+            keys = list(bmarks.keys())
+            if 0 <= idx < len(keys):
+                target = Path(bmarks[keys[idx]])
+                if target.is_dir():
+                    HIST.go(target)
+                    return target, 0, True
+                elif target.is_file():
+                    HIST.go(target.parent)
+                    new_e = read_dir(target.parent, hidden, sort_mode)
+                    sel = next((i for i, e in enumerate(new_e)
+                                if e["path"] == target), 0)
+                    return target.parent, sel, True
+                else:
+                    print(f"  {C.BRED}Path no longer exists: {bmarks[keys[idx]]}{C.RESET}")
+                    input(f"  {C.BBLACK}[Enter]{C.RESET}")
+            continue
+
+        u = choice.upper()
+
+        if u == "A":
+            # Add current directory
+            name, cancelled2 = _read_line("  Bookmark name: ", "")
+            if not cancelled2 and name.strip():
+                bmarks[name.strip()] = str(cwd)
+                if save_bookmarks(bmarks):
+                    print(f"  {C.BGREEN}Saved: {name.strip()} → {cwd}{C.RESET}")
+                else:
+                    print(f"  {C.BRED}Failed to save.{C.RESET}")
+                input(f"  {C.BBLACK}[Enter]{C.RESET}")
+
+        elif u == "N":
+            # Add custom path with tab completion
+            path_str, cancelled2 = realtime_path_input()
+            if not cancelled2 and path_str:
+                exp = Path(os.path.expanduser(path_str)).resolve()
+                if exp.exists():
+                    name, cancelled3 = _read_line("  Bookmark name: ", exp.name)
+                    if not cancelled3 and name.strip():
+                        bmarks[name.strip()] = str(exp)
+                        if save_bookmarks(bmarks):
+                            print(f"  {C.BGREEN}Saved: {name.strip()} → {exp}{C.RESET}")
+                        else:
+                            print(f"  {C.BRED}Failed to save.{C.RESET}")
+                        input(f"  {C.BBLACK}[Enter]{C.RESET}")
+                else:
+                    print(f"  {C.BRED}Path does not exist.{C.RESET}")
+                    input(f"  {C.BBLACK}[Enter]{C.RESET}")
+
+        elif u == "D":
+            if not bmarks:
+                continue
+            num, cancelled2 = _read_line("  Delete bookmark #: ", "")
+            if not cancelled2 and num.strip().isdigit():
+                idx = int(num.strip()) - 1
+                keys = list(bmarks.keys())
+                if 0 <= idx < len(keys):
+                    removed = keys[idx]
+                    del bmarks[removed]
+                    save_bookmarks(bmarks)
+                    print(f"  {C.BGREEN}Deleted: {removed}{C.RESET}")
+                    input(f"  {C.BBLACK}[Enter]{C.RESET}")
+
+def bulk_rename(items):
+    """
+    Bulk rename: opens a temp file in the user's editor with one filename
+    per line. User edits names, saves, closes editor. CLIFM renames accordingly.
+    Skips lines where name didn't change. Reports errors.
+    """
+    import tempfile
+    _restore_term()
+    # Write current names to temp file
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
+                                         delete=False, prefix='clifm_rename_') as f:
+            tmpfile = f.name
+            for item in items:
+                f.write(item.name + '\n')
+    except Exception as e:
+        return f"{C.BRED}Cannot create temp file: {e}{C.RESET}"
+
+    # Open in editor
+    editor = None
+    for ed in ["nvim", "vim", "nano", "micro", "helix", "vi"]:
+        if shutil.which(ed):
+            editor = ed
+            break
+    if not editor:
+        os.unlink(tmpfile)
+        return f"{C.BRED}No editor found (install nvim or nano){C.RESET}"
+
+    subprocess.run([editor, tmpfile])
+
+    # Read new names
+    try:
+        with open(tmpfile) as f:
+            new_names = [line.rstrip('\n') for line in f.readlines()]
+        os.unlink(tmpfile)
+    except Exception as e:
+        return f"{C.BRED}Cannot read temp file: {e}{C.RESET}"
+
+    if len(new_names) != len(items):
+        return f"{C.BRED}Line count mismatch — rename cancelled{C.RESET}"
+
+    ok = 0
+    errs = []
+    for item, new_name in zip(items, new_names):
+        new_name = new_name.strip()
+        if not new_name or new_name == item.name:
+            continue
+        if '/' in new_name:
+            errs.append(f"{item.name}: name cannot contain /")
+            continue
+        new_path = item.parent / new_name
+        if new_path.exists():
+            errs.append(f"{item.name} → {new_name}: already exists")
+            continue
+        try:
+            item.rename(new_path)
+            ok += 1
+        except Exception as e:
+            errs.append(f"{item.name}: {e}")
+
+    result = f"Renamed {ok} item(s)"
+    if errs:
+        result += f"  {C.BRED}{'; '.join(errs)}{C.RESET}"
+    return result
 
 def main():
+    _save_term()
     cwd = Path(sys.argv[1]).resolve() if len(sys.argv)>1 and Path(sys.argv[1]).is_dir() else Path.home()
     HIST.go(cwd)
 
@@ -1333,9 +1889,13 @@ def main():
         # ── MARKS ──
         elif k == "SPACE":
             if current:
-                if current in marked: marked.discard(current)
-                else: marked.add(current)
-                sel = min(len(entries)-1, sel+1) if entries else 0
+                if current in marked:
+                    marked.discard(current)
+                    status = f"Unmarked: {current.name}  [{len(marked)} marked]"
+                else:
+                    marked.add(current)
+                    status = f"Marked: {current.name}  [{len(marked)} marked]"
+                # Do NOT advance cursor — user moves with arrow keys freely
 
         elif ku == "A":
             if len(marked) == len(entries) and entries:
@@ -1375,7 +1935,7 @@ def main():
         # ── DELETE ──
         elif ku == "D":
             targets = list(marked) if marked else ([current] if current else [])
-            if not targets: status = "Nothing selected"
+            if not marked and (not entries or not current): status = "Nothing selected"
             else:
                 clear()
                 names = ", ".join(t.name for t in targets[:3])
@@ -1392,9 +1952,16 @@ def main():
                     status = f"Deleted {len(targets)-len(errs)} item(s)" if not errs else f"{C.BRED}{'; '.join(errs)}{C.RESET}"
                 else: status = "Delete cancelled"
 
-        # ── RENAME ──
+        # ── RENAME / BULK RENAME ──
         elif ku == "R":
-            if current:
+            if len(marked) > 1:
+                clear()
+                print(f"\n  {C.BCYAN}Bulk Rename{C.RESET}  "
+                      f"{C.BBLACK}{len(marked)} items — edit names in editor, save and close{C.RESET}\n")
+                targets = [e["path"] for e in entries if e["path"] in marked]
+                status = bulk_rename(targets)
+                marked.clear()
+            elif current:
                 clear()
                 nn = ask(f"Rename '{current.name}' to", current.name)
                 if nn and nn != current.name:
@@ -1423,7 +1990,7 @@ def main():
         # ── COMPRESS ──
         elif ku == "Z":
             targets = list(marked) if marked else ([current] if current else [])
-            if not targets: status = "Nothing selected"
+            if not marked and (not entries or not current): status = "Nothing selected"
             else:
                 clear()
                 fmts = [".zip",".tar.gz",".tar.bz2",".tar.xz",".tar",".gz",".bz2",".xz",".7z",".zst"]
@@ -1494,6 +2061,7 @@ def main():
             print(f"  {C.BWHITE}3{C.RESET}. Jump to path directly")
             print(f"  {C.BWHITE}4{C.RESET}. Clear filter")
             print(f"  {C.BWHITE}5{C.RESET}. Find file/folder        {C.BBLACK}(searches ~/ then system){C.RESET}")
+            print(f"  {C.BWHITE}6{C.RESET}. Open Trash bin            {C.BBLACK}(view, restore, delete){C.RESET}")
             ch = ask("Choice [1-5]")
             if ch == "1":
                 pat = ask("Filter pattern")
@@ -1548,11 +2116,49 @@ def main():
                 pat = ask("Find — enter name to search for")
                 if pat:
                     clear()
-                    results = []
+                    # Step 1: search home
+                    home_results = []
                     try:
-                        results = do_find(pat)
+                        home_results = do_find_home(pat)
                     except KeyboardInterrupt:
                         pass
+
+                    results = list(home_results)
+
+                    if home_results:
+                        # Found in home — show results and ask about systemwide
+                        clear()
+                        print(f"\n  {C.BGREEN}Found {len(home_results)} result(s) in ~/{C.RESET}")
+                        print(f"  {C.BBLACK}{'─'*50}{C.RESET}")
+
+                        # Ask if they also want to search systemwide
+                        print(f"\n  {C.BYELLOW}Also search the full system?{C.RESET}  "
+                              f"{C.BBLACK}(finds outside ~/, takes longer){C.RESET}")
+                        sys_choice, _ = _read_line("  Expand to full system? [y/N]: ", "")
+                        if sys_choice.strip().lower() == "y":
+                            clear()
+                            sys_results = []
+                            try:
+                                sys_results = do_find_system(pat, home_results)
+                            except KeyboardInterrupt:
+                                pass
+                            if sys_results:
+                                results = home_results + sys_results
+                                print(f"\n  {C.BGREEN}+{len(sys_results)} more from system  "
+                                      f"({len(results)} total){C.RESET}")
+                            else:
+                                print(f"\n  {C.BBLACK}Nothing else found systemwide.{C.RESET}")
+                            input(f"  {C.BBLACK}[Enter to see results]{C.RESET}")
+                    else:
+                        # Nothing in home — go systemwide automatically
+                        clear()
+                        print(f"\n  {C.BBLACK}Nothing in ~/  "
+                              f"Searching full system...{C.RESET}", flush=True)
+                        try:
+                            results = do_find_system(pat)
+                        except KeyboardInterrupt:
+                            pass
+
                     if results:
                         t = browse_results(results, cols)
                         if t:
@@ -1561,14 +2167,22 @@ def main():
                                 HIST.go(target_dir); cwd = target_dir; filter_str=""
                                 if t.is_file():
                                     new_e = read_dir(cwd, hidden, sort_mode)
-                                    sel = next((i for i,e in enumerate(new_e) if e["path"]==t), 0)
-                                else: sel=0
+                                    sel = next((i for i,e in enumerate(new_e)
+                                                if e["path"]==t), 0)
+                                else:
+                                    sel = 0
                                 status = "Navigated to: " + str(cwd)
                             except Exception as ex:
                                 status = "Error: " + str(ex)
                     else:
                         status = f"Nothing found for '{pat}'"
-
+            elif ch == "6":
+                new_cwd, jumped = trash_menu(hidden, sort_mode, HIST)
+                if jumped and new_cwd:
+                    cwd = new_cwd
+                    sel = 0
+                    filt = ""
+                    status = f"→ Trash bin: {cwd}"
         # ── TOGGLE HIDDEN ──
         elif k == ".":
             hidden = not hidden
@@ -1616,8 +2230,46 @@ def main():
             subprocess.run([shell], cwd=str(cwd))
 
         # ── REFRESH ──
-        elif k == "F5":
-            status = "Refreshed"
+        # ── TRASH (B = Bin) ──
+        # B alone with nothing selected = open trash browser
+        # B with marks or on a file = move to trash
+        elif ku == "B":
+            targets = list(marked) if marked else ([current] if current else [])
+            targets = [t for t in targets if t.exists() or t.is_symlink()]
+            if not marked and (not entries or not current):
+                # Open trash browser
+                new_cwd, jumped = trash_menu(hidden, sort_mode, HIST)
+                if jumped and new_cwd:
+                    cwd = new_cwd
+                    sel = 0
+                    filt = ""
+                    status = f"→ Trash: {cwd}"
+            else:
+                clear()
+                names = ", ".join(t.name for t in targets[:3])
+                if len(targets) > 3: names += f" +{len(targets)-3}"
+                if ask_confirm(f"Move to trash: {C.BWHITE}{names}{C.RESET}?"):
+                    ok, errs = trash_items(targets)
+                    marked -= set(targets)
+                    sel = max(0, sel - 1)
+                    trash_dir = get_trash_dir()
+                    if not errs:
+                        status = (f"Trashed {ok} item(s)  "
+                                  f"{C.BBLACK}[B with nothing selected = open trash]{C.RESET}")
+                    else:
+                        status = (f"Trashed {ok}  "
+                                  f"{C.BRED}{'; '.join(errs)}{C.RESET}")
+                else:
+                    status = "Trash cancelled"
+
+        # ── BOOKMARKS (M) ──
+        elif ku == "M":
+            new_cwd, new_sel, jumped = bookmarks_menu(cwd, hidden, sort_mode, HIST)
+            if jumped:
+                cwd = new_cwd
+                sel = new_sel
+                filt = ""
+                status = f"→ {cwd}"
 
         # ── CLEAR MARKS ──
         elif k == "ESC":
