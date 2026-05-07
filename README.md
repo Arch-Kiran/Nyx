@@ -1,6 +1,6 @@
-# CLIFM — CLI File Manager
+# Nyx — CLI File Manager
 
-> **"Your desktop died. Your files didn't. CLIFM keeps you moving."**
+> **"Your desktop died. Your files didn't. Nyx keeps you moving."**
 
 A zero-dependency, ASCII-art file manager for the terminal. Built for Linux users who live without a desktop environment — Kali, Arch, servers, chroots, Termux on Android — anywhere a GUI file manager is absent, broken, or simply not needed.
 
@@ -19,7 +19,7 @@ A zero-dependency, ASCII-art file manager for the terminal. Built for Linux user
 - **Full file operations** — copy, cut, paste, delete, rename, new file/dir, chmod, open with
 - **Multiselect** — mark multiple files with Space, apply any operation to all marked at once
 - **Trash bin** — move to trash instead of permanent delete, with restore and clear options
-- **Bookmarks** — save and jump to paths, stored inside clifm.py itself, no external files
+- **Bookmarks** — save and jump to paths, stored inside nyx.py itself, no external files
 - **Bulk rename** — mark multiple files, press R, edit all names in your editor at once
 - **Compression** — zip, tar.gz, tar.bz2, tar.xz, tar, gz, bz2, xz, 7z, zst
 - **Extraction** — all major archive formats auto-detected
@@ -29,7 +29,7 @@ A zero-dependency, ASCII-art file manager for the terminal. Built for Linux user
 - **Go to path** — real-time Tab completion path input with live results shown as you type
 - **Navigation history** — back and forward like a browser
 - **Properties panel** — full file stats, permissions, MIME type, inode
-- **Shell escape** — drop to shell in current directory, return to CLIFM after
+- **Shell escape** — drop to shell in current directory, return to Nyx after
 - **30+ distro support** — auto-detects OS and package manager,
 - **Termux/Android support** — full support, never uses sudo
 - **Zero dependencies** — pure Python 3.8+ stdlib, one file, no pip installs
@@ -43,9 +43,9 @@ A zero-dependency, ASCII-art file manager for the terminal. Built for Linux user
 - No pip packages. No external libraries. Zero installation.
 
 ```bash
-python3 clifm.py              # start in home directory
-python3 clifm.py /etc         # start at a specific path
-chmod +x clifm.py && ./clifm.py
+python3 nyx.py              # start in home directory
+python3 nyx.py /etc         # start at a specific path
+chmod +x nyx.py && ./nyx.py
 ```
 
 ---
@@ -71,7 +71,7 @@ chmod +x clifm.py && ./clifm.py
 
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
-║ CLIFM v4.0  KALI  [apt]                          [.][Name↑][GRID]    ║
+║ Nyx v1.0  KALI  [apt]                          [.][Name↑][GRID]    ║
 ║ ▶ /home/kira/projects                    © main.py, utils.py         ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║                                                                      ║
@@ -256,11 +256,11 @@ Access trash browser via `/` → `6`:
   RA               → Restore ALL
   D[number]        → Permanently delete item  e.g. D3
   DA               → Permanently delete ALL trash
-  O                → Navigate into trash folder in CLIFM
+  O                → Navigate into trash folder in Nyx
   Q or Enter       → Close
 ```
 
-When restoring, CLIFM asks where to put the files:
+When restoring, Nyx asks where to put the files:
 
 ```
   Restore to where?
@@ -278,9 +278,9 @@ Option 1 collects everything into `~/Restored/` — home directory stays clean. 
 Press `M`:
 
 ```
-  Bookmarks / Shortcuts  (stored inside clifm.py)
+  Bookmarks / Shortcuts  (stored inside nyx.py)
 
-     1.  myproject          /home/kira/projects/clifm
+     1.  myproject          /home/kira/projects/nyx
      2.  configs            /etc/nginx
 
   A. Add current directory
@@ -289,13 +289,13 @@ Press `M`:
   Enter/Q. Cancel
 ```
 
-Type a number to jump to that path instantly. Bookmarks are written into the `_BOOKMARKS_DATA` line inside `clifm.py` — zero external files, zero config directories, fully self-contained.
+Type a number to jump to that path instantly. Bookmarks are written into the `_BOOKMARKS_DATA` line inside `nyx.py` — zero external files, zero config directories, fully self-contained.
 
 ---
 
 ## Bulk Rename
 
-Mark multiple files with `Space`, press `R`. Your editor opens with one filename per line. Edit names, save, close. CLIFM renames every file whose name changed. Unchanged lines are skipped. Conflicts are reported.
+Mark multiple files with `Space`, press `R`. Your editor opens with one filename per line. Edit names, save, close. Nyx renames every file whose name changed. Unchanged lines are skipped. Conflicts are reported.
 
 ---
 
@@ -324,8 +324,8 @@ Press `Z` on any file, folder, or selection of marked items:
 | Format | Requires |
 |--------|---------|
 | `.zip` `.tar` `.tar.gz` `.tar.bz2` `.tar.xz` `.gz` `.bz2` `.xz` | Python built-in — always works |
-| `.7z` | `7z` binary — CLIFM offers to install |
-| `.zst` | `zstd` binary — CLIFM offers to install |
+| `.7z` | `7z` binary — Nyx offers to install |
+| `.zst` | `zstd` binary — Nyx offers to install |
 
 ---
 
@@ -366,7 +366,7 @@ Detected automatically. Never uses sudo. Uses `pkg install` or `apt install` dir
 - Pure Python stdlib — no pip, one file
 - `os.read(fd, 1)` directly on the kernel fd — bypasses all Python buffering layers
 - `termios` / `tty` / `select()` for reliable raw single-keypress input
-- Bookmarks written into `_BOOKMARKS_DATA` line inside `clifm.py` on save
+- Bookmarks written into `_BOOKMARKS_DATA` line inside `nyx.py` on save
 - Navigation history — 50-entry deque, back and forward
 - Clipboard survives directory changes
 - Trash follows XDG spec — `~/.local/share/Trash/files`

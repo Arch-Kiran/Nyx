@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CLIFM v3.0 - CLI File Manager
+Nyx - CLI File Manager
 ASCII icon grid + list view, full file ops, zero heavy dependencies.
 Pure Python stdlib only.
 """
@@ -374,7 +374,7 @@ def read_dir(path, show_hidden, sort_mode, filter_str=""):
 def render_header(cwd, cols, clip, sort_mode, show_hidden, view_mode, filter_str):
     inner = cols - 2
     # Row 1: title
-    title = f" {C.BBLUE}{C.BOLD}CLIFM{C.RESET} {C.BBLACK}v3.0{C.RESET} {C.BBLACK}─{C.RESET} {C.BCYAN}{OS.distro.upper()}{C.RESET} {C.BBLACK}[{OS.pkg['name'] if OS.pkg else '?'}]{C.RESET}"
+    title = f" {C.BBLUE}{C.BOLD}Nyx{C.RESET} {C.BBLACK}v3.0{C.RESET} {C.BBLACK}─{C.RESET} {C.BCYAN}{OS.distro.upper()}{C.RESET} {C.BBLACK}[{OS.pkg['name'] if OS.pkg else '?'}]{C.RESET}"
     flags = f" {C.BBLACK}[{'H' if show_hidden else '.'}] [{SORT_LABEL[sort_mode]}] [{'GRID' if view_mode=='grid' else 'LIST'}]{C.RESET}"
     gap = inner - vlen(title) - vlen(flags)
     print(f"{C.BBLACK}╔{'═'*inner}╗{C.RESET}")
@@ -1113,7 +1113,7 @@ def show_help(cols):
     clear()
     inner = cols - 2
     print(f"{C.BBLACK}╔{'═'*inner}╗{C.RESET}")
-    print(f"{C.BBLACK}║{C.RESET}{pad_to(f' {C.BCYAN}{C.BOLD}CLIFM v3.0  Help{C.RESET}', inner)}{C.BBLACK}║{C.RESET}")
+    print(f"{C.BBLACK}║{C.RESET}{pad_to(f' {C.BCYAN}{C.BOLD}Nyx  Help{C.RESET}', inner)}{C.BBLACK}║{C.RESET}")
     print(f"{C.BBLACK}╠{'═'*inner}╣{C.RESET}")
     sections = [
         ("Navigation", [
@@ -1371,7 +1371,7 @@ def _pick_restore_dest():
     Options:
       1 = ~/Restored folder (safe default)
       2 = Type a path with Tab completion
-      3 = Browse with CLIFM navigation (opens realtime_path_input)
+      3 = Browse with Nyx navigation (opens realtime_path_input)
     """
     restored_dir = Path.home() / "Restored"
 
@@ -1574,9 +1574,9 @@ def trash_menu(hidden, sort_mode, HIST):
                     input(f"  {C.BBLACK}[Enter]{C.RESET}")
 
 # ─── BOOKMARKS ────────────────────────────────────────────────────────────────
-# ── BOOKMARKS stored inside clifm.py itself ──
+# ── BOOKMARKS stored inside nyx.py itself ──
 # This line is read and written by load/save_bookmarks. Do not edit manually.
-_BOOKMARKS_DATA = {"Shared Folder": "/mnt/hgfs/Shared Folder", "Universal Shared": "/mnt/hgfs/Universal Shared"}
+_BOOKMARKS_DATA = {}
 
 def load_bookmarks():
     """Load bookmarks from the _BOOKMARKS_DATA dict embedded in this script."""
@@ -1618,7 +1618,7 @@ def bookmarks_menu(cwd, hidden, sort_mode, HIST):
         clear()
         inner = term_size()[0] - 2
         print(f"\n  {C.BCYAN}Bookmarks / Shortcuts{C.RESET}  "
-              f"{C.BBLACK}(stored inside clifm.py){C.RESET}\n")
+              f"{C.BBLACK}(stored inside nyx.py){C.RESET}\n")
 
         if bmarks:
             keys = list(bmarks.keys())
@@ -1713,7 +1713,7 @@ def bookmarks_menu(cwd, hidden, sort_mode, HIST):
 def bulk_rename(items):
     """
     Bulk rename: opens a temp file in the user's editor with one filename
-    per line. User edits names, saves, closes editor. CLIFM renames accordingly.
+    per line. User edits names, saves, closes editor. Nyx renames accordingly.
     Skips lines where name didn't change. Reports errors.
     """
     import tempfile
@@ -1721,7 +1721,7 @@ def bulk_rename(items):
     # Write current names to temp file
     try:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
-                                         delete=False, prefix='clifm_rename_') as f:
+                                         delete=False, prefix='nyx_rename_') as f:
             tmpfile = f.name
             for item in items:
                 f.write(item.name + '\n')
@@ -2289,9 +2289,9 @@ def main():
 # ─── ENTRY ───────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     if sys.version_info < (3, 8):
-        print("CLIFM requires Python 3.8+"); sys.exit(1)
+        print("Nyx requires Python 3.8+"); sys.exit(1)
     if not sys.stdin.isatty():
-        print("CLIFM must run in a terminal."); sys.exit(1)
+        print("Nyx must run in a terminal."); sys.exit(1)
     try:
         main()
     except KeyboardInterrupt:
