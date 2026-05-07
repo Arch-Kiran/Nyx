@@ -35,6 +35,11 @@ A zero-dependency, ASCII-art file manager for the terminal. Built for Linux user
 - **Zero dependencies** — pure Python 3.8+ stdlib, one file, no pip installs
 
 ---
+## Install command
+
+```bash
+git clone https://github.com/Arch-Kiran/Nyx.git
+```
 
 ## Requirements
 
